@@ -1,0 +1,17 @@
+apiVersion: v1
+appVersion: 2.3.1
+description: Spring Boot Helm chart for Kubernetes
+home: http://xxx.com
+keywords:
+- java
+- spring-boot
+- devops
+- spring-cloud
+maintainers:
+- email: fengsu_lin@163.com
+  name: feng
+name: spring-boot
+sources:
+- https://github.com/fengsulin/springboot-chart-template.git
+type: application
+version: 2.1.5

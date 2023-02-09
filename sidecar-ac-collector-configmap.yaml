@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar-ac-collector-configmap
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         1
+        Log_Level     info
+        Daemon        off
+        Keep_Log      off
+        Parsers_File  parsers.conf
+        HTTP_Server   On
+        HTTP_Listen   0.0.0.0
+        HTTP_Port     2020
+    @INCLUDE input-access_log.conf
+    @INCLUDE output-access_log-kafka.conf
+    @INCLUDE filter-record-modifier-access_log.conf
+    @INCLUDE input-ac-debug-log.conf
+    @INCLUDE output-ac-debug-log-kafka.conf
+    @INCLUDE filter-record-modifier-ac-debug-log.conf
+  filter-record-modifier-access_log.conf: |
+    [FILTER]
+        Name record_modifier
+        Match access_log.*
+        Record AC-Indices ${AC-NAMESPACE}-access_log
+        Record AC-JOB_BUILD ${JOB_BUILD}
+  filter-record-modifier-ac-debug-log.conf: |
+    [FILTER]
+        Name record_modifier
+        Match ac-debug-log.*
+        Record AC-Indices ${AC-NAMESPACE}-debug_log
+  input-access_log.conf: |
+    [INPUT]
+        Name              tail
+        Tag               access_log.*
+        Key               AC-COLLECTOR-LOG
+        Path              /mnt/log/${SERVER_TOMCAT_ACCESSLOG_PREFIX}*${SERVER_TOMCAT_ACCESSLOG_SUFFIX}
+        Parser            json_parser
+        DB                /var/log/flb_kube.db
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
+        Refresh_Interval  1
+  input-ac-debug-log.conf: |
+    [INPUT]
+        Name              tail
+        Tag               debug_log.*
+        Key               AC-COLLECTOR-LOG
+        Path              /mnt/log/catalina.out
+        #Parser            json_parser
+        DB                /var/log/flb_kube.db
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
+        Refresh_Interval  1
+  output-access_log-kafka.conf: |
+    [OUTPUT]
+        Name           kafka
+        Match          access_log.*
+        Brokers        192.168.17.118:9092,192.168.119:9092,192.168.120:9092
+        Topics         ${AC-NAMESPACE}-access_log
+        Timestamp_Key  AC-COLLECTOR-TIMESTAMP
+        Timestamp_Format iso8601
+        Format         json
+        Retry_Limit    false
+        # hides errors "Receive failed: Disconnected" when kafka kills idle connections
+        rdkafka.log.connection.close false
+        # producer buffer is not included in http://fluentbit.io/documentation/0.12/configuration/memory_usage.html#estimating
+        rdkafka.queue.buffering.max.kbytes 10240
+        # for logs you'll probably want this ot be 0 or 1, not more
+        rdkafka.request.required.acks 1
+  output-ac-debug-log-kafka.conf: |
+    [OUTPUT]
+        Name           kafka
+        Match          debug_log.*
+        Brokers        192.168.17.118:9092,192.168.119:9092,192.168.120:9092
+        Topics         ${AC-NAMESPACE}-debug_log
+        Timestamp_Key  AC-COLLECTOR-TIMESTAMP
+        Timestamp_Format iso8601
+        Format         json
+        Retry_Limit    false
+        # hides errors "Receive failed: Disconnected" when kafka kills idle connections
+        rdkafka.log.connection.close false
+        # producer buffer is not included in http://fluentbit.io/documentation/0.12/configuration/memory_usage.html#estimating
+        rdkafka.queue.buffering.max.kbytes 10240
+        # for logs you'll probably want this ot be 0 or 1, not more
+        rdkafka.request.required.acks 1
+  parsers.conf: |
+    [PARSER]
+        Name        json_parser
+        Format      json
+        Time_Key    DateTime
+        Time_Keep   on
+        Time_Format yyyy-MM-dd'T'HH:mm:ss.SSSZZ
